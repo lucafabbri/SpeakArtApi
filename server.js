@@ -5,7 +5,6 @@ const Hapi=require('hapi');
 const Rembrandt = require('rembrandt');
 const fs = require('fs');
 const request = require('request');
-const tempy = require('tempy');
 
 const download = async function(uri, filename, callback){
   await request.head(uri, async function(err, res, body){
