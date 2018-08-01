@@ -2,16 +2,18 @@
 
 const btoa = require('btoa');
 const Hapi=require('hapi');
-const Rembrandt = require('rembrandt');
 const fs = require('fs');
 const request = require('request');
+const PNG = require('pngjs').PNG;
+const pixelmatch = require('pixelmatch');
+const im = require('imagemagick');
 
 const download = async function(uri, filename, callback){
   await request.head(uri, async function(err, res, body){
     console.log('content-type:', res.headers['content-type']);
     console.log('content-length:', res.headers['content-length']);
 
-    await request(uri).pipe(fs.createWriteStream(filename)).on('close', callback);
+    await request(uri).pipe(fs.createWriteStream(filename+'.jpg')).on('close', callback);
   });
 };
 
@@ -30,52 +32,63 @@ server.route({
         return'hello world';
     }
 });
-
+server.route({
+    method: 'POST',
+    path: '/prepare',
+    handler: async function(request,h){
+        var load = request.payload;
+        await download(load.urlOriginal, __dirname+'/originals/'+load.job, async function(){
+            console.log('done download A');
+            await im.convert([__dirname+'/originals/'+load.job+'.jpg',__dirname+'/originals/'+load.job+'.png'], 
+                function(err, stdout){
+                if (err) throw err;
+                    console.log('stdout:', stdout);
+                });
+        });
+        await download(load.urlNew, __dirname+'/news/'+load.job, async function(){
+            console.log('done download B');
+            await im.convert([__dirname+'/news/'+load.job+'.jpg',__dirname+'/news/'+load.job+'.png'], 
+                function(err, stdout){
+                if (err) throw err;
+                    console.log('stdout:', stdout);
+                });
+        });
+        return {"message":"job started"};
+    }
+});
 server.route({
     method: 'POST',
     path: '/compare',
     handler: async function(request,h){
         var load = request.payload;
-        await download(load.urlOriginal, __dirname+'/originals/original.jpg', function(){
-            console.log('done download A');
-        });
-        await download(load.urlNew, __dirname+'/news/new.jpg', function(){
-            console.log('done download B');
-        });
-          
-        var rembrandt = new Rembrandt({
-            // `imageA` and `imageB` can be either Strings (file path on node.js,
-            // public url on Browsers) or Buffers
-            imageA: __dirname+'/originals/original.jpg',
-            imageB: __dirname+'/news/new.jpg',
-           
-            // Needs to be one of Rembrandt.THRESHOLD_PERCENT or Rembrandt.THRESHOLD_PIXELS
-            thresholdType: (load.thresholdType==="THRESHOLD_PERCENT")?Rembrandt.THRESHOLD_PERCENT:Rembrandt.THRESHOLD_PIXELS,
-           
-            // The maximum threshold (0...1 for THRESHOLD_PERCENT, pixel count for THRESHOLD_PIXELS
-            maxThreshold: load.maxThreshold,
-           
-            // Maximum color delta (0...255):
-            maxDelta: load.maxColorDelta,
-           
-            // Maximum surrounding pixel offset
-            maxOffset: load.maxPixelOffset,
-           
-            renderComposition: true, // Should Rembrandt render a composition image?
-            compositionMaskColor: Rembrandt.Color.RED // Color of unmatched pixels
-          })
-          return await rembrandt.compare()
-            .then(function (result) {
-                return {
-                    "image":"data:image/png;base64,"+btoa(String.fromCharCode.apply(null, new Uint8Array(result.compositionImage))), 
-                    "differences":result.differences, 
-                    "passed":result.passed, 
-                    "percentageDifferences": result.percentageDifference
-                }
-            })
-            .catch((e) => {
-                console.error(e)
-            });
+        // var original = __dirname+'/originals/'+load.job+'.png';
+        // var thenew = __dirname+'/news/'+load.job+'.png';
+        var original = load.urlOriginal;
+        var thenew = load.urlNew;
+        if(fs.existsSync()&&fs.existsSync()){
+
+            console.log("loading files");
+
+            var img1 = fs.createReadStream(original).pipe(new PNG()).on('parsed', doneReading),
+                img2 = fs.createReadStream(thenew).pipe(new PNG()).on('parsed', doneReading),
+                filesRead = 0;
+
+            function doneReading() {
+                console.log("files loaded "+filesRead+" for comparing");
+                if (++filesRead < 2) return;
+                console.log("files loaded "+filesRead+" for comparing");
+                var diff = new PNG({width: img1.width, height: img1.height});
+                console.log("ready for pixel matching");
+                var pmresult = pixelmatch(img1.data, img2.data, diff.data, img1.width, img1.height, {threshold: load.maxThreshold});
+                console.log(pmresult+" of "+img1.width*img1.height+" pixels found different, saving");
+                diff.pack().pipe(fs.createWriteStream(load.job));
+            }
+            return {"message":"compare started"};
+        }
+        else
+        {
+            return { "error":"JOB_IS_NOT_OVER","message":"Image upload is not completed yet"};
+        }
     }
 });
 
