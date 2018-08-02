@@ -30,6 +30,14 @@ const server=Hapi.server({
 });
 
 server.route({
+method:'GET',
+path:'/hello',
+handler:function(request,h){
+    return __dirname;
+}
+});
+
+server.route({
     method: 'POST',
     path: '/compare',
     handler: async function(request,h){
