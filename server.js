@@ -6,7 +6,13 @@ const fs = require('fs');
 const request = require('request');
 const PNG = require('pngjs').PNG;
 const pixelmatch = require('pixelmatch');
-const im = require('imagemagick');
+const mysql      = require('mysql');
+const connection = mysql.createConnection({
+    host : '127.0.0.1',
+    user : 'speakartapi',
+    password : 'Gc3mt_82',
+    database : 'WizardSpeakartit'
+});
 
 const download = async function(uri, filename, callback){
   await request.head(uri, async function(err, res, body){
@@ -23,39 +29,6 @@ const server=Hapi.server({
     port:8000
 });
 
-// Add the route
-server.route({
-    method:'GET',
-    path:'/hello',
-    handler:function(request,h) {
-
-        return'hello world';
-    }
-});
-server.route({
-    method: 'POST',
-    path: '/prepare',
-    handler: async function(request,h){
-        var load = request.payload;
-        await download(load.urlOriginal, __dirname+'/originals/'+load.job, async function(){
-            console.log('done download A');
-            await im.convert([__dirname+'/originals/'+load.job+'.jpg',__dirname+'/originals/'+load.job+'.png'], 
-                function(err, stdout){
-                if (err) throw err;
-                    console.log('stdout:', stdout);
-                });
-        });
-        await download(load.urlNew, __dirname+'/news/'+load.job, async function(){
-            console.log('done download B');
-            await im.convert([__dirname+'/news/'+load.job+'.jpg',__dirname+'/news/'+load.job+'.png'], 
-                function(err, stdout){
-                if (err) throw err;
-                    console.log('stdout:', stdout);
-                });
-        });
-        return {"message":"job started"};
-    }
-});
 server.route({
     method: 'POST',
     path: '/compare',
@@ -65,23 +38,47 @@ server.route({
         // var thenew = __dirname+'/news/'+load.job+'.png';
         var original = load.urlOriginal;
         var thenew = load.urlNew;
-        if(fs.existsSync()&&fs.existsSync()){
+        if(await fs.existsSync(original)&& await fs.existsSync(thenew)){
 
             console.log("loading files");
+            var resultId = 3;
+            await connection.query('INSERT INTO api_compare_results SET ?',{
+                    url_original: load.urlOriginal,
+                    url_new: load.urlNew,
+                    max_threshold: load.maxThreshold,
+                    url_result: load.job,
+                    pixel_total: 0,
+                    pixel_diff: 0,
+                    status: "running"
+                }, function (error, results, fields) {
+                    if (error) console.log( error);
+                    // Neat!
+                    //console.log(results);
+                    resultId = results.insertId;
+                    console.log(resultId);
+                    doneReading();
+                });
+            var img1 = fs.createReadStream(original).pipe(new PNG()).on('parsed', doneReading);
+            var img2 = fs.createReadStream(thenew).pipe(new PNG()).on('parsed', doneReading);
+            var filesRead = 0;
 
-            var img1 = fs.createReadStream(original).pipe(new PNG()).on('parsed', doneReading),
-                img2 = fs.createReadStream(thenew).pipe(new PNG()).on('parsed', doneReading),
-                filesRead = 0;
-
-            function doneReading() {
+            async function doneReading() {
                 console.log("files loaded "+filesRead+" for comparing");
-                if (++filesRead < 2) return;
+                if (++filesRead < 3) return;
+
                 console.log("files loaded "+filesRead+" for comparing");
                 var diff = new PNG({width: img1.width, height: img1.height});
                 console.log("ready for pixel matching");
-                var pmresult = pixelmatch(img1.data, img2.data, diff.data, img1.width, img1.height, {threshold: load.maxThreshold});
+                var pmresult = await pixelmatch(img1.data, img2.data, diff.data, img1.width, img1.height, {threshold: load.maxThreshold});
                 console.log(pmresult+" of "+img1.width*img1.height+" pixels found different, saving");
-                diff.pack().pipe(fs.createWriteStream(load.job));
+                await diff.pack().pipe(fs.createWriteStream(load.job));
+
+                await connection.query('UPDATE api_compare_results SET pixel_total = ?, pixel_diff = ?, status = ?, finished_at = CURRENT_TIMESTAMP() WHERE id = ?', [(img1.width*img1.height),pmresult,'finished',resultId.toString()],function (error, results, fields) {
+                        if (error){ 
+                            console.log(error);
+                        }
+                        // ...
+                    });
             }
             return {"message":"compare started"};
         }
@@ -96,6 +93,17 @@ server.route({
 async function start() {
 
     try {
+
+        await connection.connect(function(err) {
+            if (err) {
+                console.error('error connecting: ' + err.stack);
+                return;
+            }
+            
+            console.log('connected as id ' + connection.threadId);
+        });
+            
+
         await server.start();
     }
     catch (err) {

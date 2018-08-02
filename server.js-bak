@@ -100,6 +100,31 @@ server.route({
     }
 });
 
+server.route({
+    method: 'POST',
+    path: '/prepare',
+    handler: async function(request,h){
+        var load = request.payload;
+        await download(load.urlOriginal, __dirname+'/originals/'+load.job, async function(){
+            console.log('done download A');
+            await im.convert([__dirname+'/originals/'+load.job+'.jpg',__dirname+'/originals/'+load.job+'.png'], 
+                function(err, stdout){
+                if (err) throw err;
+                    console.log('stdout:', stdout);
+                });
+        });
+        await download(load.urlNew, __dirname+'/news/'+load.job, async function(){
+            console.log('done download B');
+            await im.convert([__dirname+'/news/'+load.job+'.jpg',__dirname+'/news/'+load.job+'.png'], 
+                function(err, stdout){
+                if (err) throw err;
+                    console.log('stdout:', stdout);
+                });
+        });
+        return {"message":"job started"};
+    }
+});
+
 // Start the server
 async function start() {
 
