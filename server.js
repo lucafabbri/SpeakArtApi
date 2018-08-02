@@ -107,6 +107,8 @@ server.route({
 
 // Start the server
 async function start() {
+    
+    await server.register(require('inert'));
 
     try {
 
