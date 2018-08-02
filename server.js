@@ -7,6 +7,8 @@ const request = require('request');
 const PNG = require('pngjs').PNG;
 const pixelmatch = require('pixelmatch');
 const mysql      = require('mysql');
+const Path = require('path');
+
 const connection = mysql.createConnection({
     host : '127.0.0.1',
     user : 'speakartapi',
