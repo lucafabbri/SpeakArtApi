@@ -26,7 +26,12 @@ const download = async function(uri, filename, callback){
 // Create a server with a host and port
 const server=Hapi.server({
     host:'localhost',
-    port:8000
+    port:8000,
+    routes: {
+        files: {
+            relativeTo: Path.join(__dirname, 'results')
+        }
+    }
 });
 
 server.route({
@@ -44,8 +49,9 @@ server.route({
         var load = request.payload;
         // var original = __dirname+'/originals/'+load.job+'.png';
         // var thenew = __dirname+'/news/'+load.job+'.png';
-        var original = load.urlOriginal;
-        var thenew = load.urlNew;
+        var original = __dirname+load.urlOriginal;
+        var thenew = __dirname+load.urlNew;
+		var urlresult = __dirname+load.job;
         if(await fs.existsSync(original)&& await fs.existsSync(thenew)){
 
             console.log("loading files");
@@ -79,7 +85,7 @@ server.route({
                 console.log("ready for pixel matching");
                 var pmresult = await pixelmatch(img1.data, img2.data, diff.data, img1.width, img1.height, {threshold: load.maxThreshold});
                 console.log(pmresult+" of "+img1.width*img1.height+" pixels found different, saving");
-                await diff.pack().pipe(fs.createWriteStream(load.job));
+                await diff.pack().pipe(fs.createWriteStream(urlresult));
 
                 await connection.query('UPDATE api_compare_results SET pixel_total = ?, pixel_diff = ?, status = ?, finished_at = CURRENT_TIMESTAMP() WHERE id = ?', [(img1.width*img1.height),pmresult,'finished',resultId.toString()],function (error, results, fields) {
                         if (error){ 
