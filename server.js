@@ -7,7 +7,6 @@ const request = require('request');
 const PNG = require('pngjs').PNG;
 const pixelmatch = require('pixelmatch');
 const mysql      = require('mysql');
-const Path = require('path');
 
 const connection = mysql.createConnection({
     host : '127.0.0.1',
@@ -28,20 +27,16 @@ const download = async function(uri, filename, callback){
 // Create a server with a host and port
 const server=Hapi.server({
     host:'localhost',
-    port:8000,
-    routes: {
-        files: {
-            relativeTo: Path.join(__dirname, 'results')
-        }
-    }
+    port:8000
 });
 
+
 server.route({
-method:'GET',
-path:'/hello',
-handler:function(request,h){
-    return __dirname;
-}
+	method:'GET',
+	path:'/hello',
+	handler:function(request,h){
+		return __dirname;
+	}
 });
 
 server.route({
@@ -107,8 +102,6 @@ server.route({
 
 // Start the server
 async function start() {
-    
-    await server.register(require('inert'));
 
     try {
 
