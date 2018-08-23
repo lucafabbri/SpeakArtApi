@@ -42,17 +42,22 @@ server.route({
 server.route({
     method: 'POST',
     path: '/compare',
+	config: {
+        cors: {
+            origin: ['*'],
+            additionalHeaders: ['cache-control', 'x-requested-with']
+        }
+    },
     handler: async function(request,h){
         var load = request.payload;
-        // var original = __dirname+'/originals/'+load.job+'.png';
-        // var thenew = __dirname+'/news/'+load.job+'.png';
-        var original = __dirname+load.urlOriginal;
-        var thenew = __dirname+load.urlNew;
-		var urlresult = __dirname+load.job;
+        var original = __dirname+'/../../web3.dacossistemi.it'+load.urlOriginal;
+        var thenew = __dirname+'/../../web3.dacossistemi.it'+load.urlNew;
+		var urlresult = __dirname+'/../../web3.dacossistemi.it'+load.job;
         if(await fs.existsSync(original)&& await fs.existsSync(thenew)){
 
             console.log("loading files");
-            var resultId = 3;
+            var resultId = 0;
+			var pid = (new Date()).getTime();
             await connection.query('INSERT INTO api_compare_results SET ?',{
                     url_original: load.urlOriginal,
                     url_new: load.urlNew,
@@ -60,7 +65,8 @@ server.route({
                     url_result: load.job,
                     pixel_total: 0,
                     pixel_diff: 0,
-                    status: "running"
+                    status: "running",
+					process_id: pid
                 }, function (error, results, fields) {
                     if (error) console.log( error);
                     // Neat!
@@ -91,7 +97,7 @@ server.route({
                         // ...
                     });
             }
-            return {"message":"compare started"};
+            return {"message":"compare started", "pid":pid};
         }
         else
         {
